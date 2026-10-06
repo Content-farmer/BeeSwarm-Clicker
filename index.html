@@ -5002,7 +5002,12 @@ __bscFreezeGameData();   // v18.1: freeze AFTER init() has filled UPG_BY_ID
 <!-- ===================== LEADERBOARDS (Firebase) ===================== -->
 <style id="lbStyles">
 #statsArea input.lbIn,.modal input.lbIn{user-select:text;-webkit-user-select:text}
-.lbIn{width:100%;background:rgba(0,0,0,.35);border:1.5px solid #8a5a08;border-radius:9px;color:var(--cream);font-family:var(--f-body);font-weight:700;font-size:14px;padding:9px 11px;margin-bottom:8px;outline:none}
+#lbAuthLayer{position:fixed;inset:0;z-index:200;background:rgba(20,12,2,.65);display:flex;align-items:flex-start;justify-content:center;padding:max(16px,6vh) 14px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.lbAuthBox{width:min(420px,100%);background:linear-gradient(160deg,var(--panel2),var(--panel3));border:2px solid var(--honey3);border-radius:16px;padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.6);user-select:text;-webkit-user-select:text}
+.lbAuthBox h3{font-family:var(--f-head);font-size:19px;color:var(--gold);font-weight:800;margin-bottom:8px}
+.lbAuthBox .mBody{font-size:13px;font-weight:700;color:var(--cream2);line-height:1.55}
+.lbAuthBox .btnRow{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.lbIn{width:100%;background:rgba(0,0,0,.35);border:1.5px solid #8a5a08;border-radius:9px;color:var(--cream);font-family:var(--f-body);font-weight:700;font-size:16px;padding:9px 11px;margin-bottom:8px;outline:none}
 .lbIn:focus{border-color:var(--honey2)}
 .lbPills{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0 8px}
 .lbPill{background:rgba(0,0,0,.32);border:1.5px solid rgba(201,138,16,.45);color:#d9c49a;font-family:var(--f-head);font-weight:800;font-size:11.5px;border-radius:9px;padding:6px 4px;cursor:pointer}
@@ -5192,19 +5197,24 @@ async function logout(){ try{await FB.auth.signOut(FB.au);}catch(e){} me=null;sr
 
 /* ---------------- UI ---------------- */
 let mode='new';
+function closeAuth(){ const o=document.getElementById('lbAuthLayer'); if(o)o.remove(); }
 function openAuth(m){
   if(status!=='ready'){ toast('Leaderboards','Not available right now.','crown'); return; }
   mode=m||mode;
-  openModal(`<h3>Leaderboards</h3><div class="mBody" style="margin-bottom:8px">Pick a username to appear on the boards. Your progress is submitted automatically while you play.</div>
+  closeAuth();
+  const layer=document.createElement('div'); layer.id='lbAuthLayer';
+  layer.innerHTML=`<div class="lbAuthBox"><h3>Leaderboards</h3><div class="mBody" style="margin-bottom:8px">Pick a username to appear on the boards. Your progress is submitted automatically while you play.</div>
    <div class="lbTabs"><button class="lbPill ${mode==='new'?'on':''}" style="flex:1" onclick="__lb.tab('new')">Create account</button><button class="lbPill ${mode==='in'?'on':''}" style="flex:1" onclick="__lb.tab('in')">Log in</button></div>
    <input class="lbIn" id="lbUser" maxlength="16" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false">
    <input class="lbIn" id="lbPass" type="password" placeholder="Password (6+ characters)" autocomplete="${mode==='new'?'new-password':'current-password'}">
    <div class="lbMsg" id="lbMsg">${mode==='new'?'Usernames are public. There is no password reset, so remember your password.':''}</div>
-   <div class="btnRow"><button class="btn small" onclick="closeModal()">Cancel</button><button class="btn small purple" id="lbGo">${mode==='new'?'Create account':'Log in'}</button></div>`);
+   <div class="btnRow"><button class="btn small" onclick="__lb.close()">Cancel</button><button class="btn small purple" id="lbGo">${mode==='new'?'Create account':'Log in'}</button></div></div>`;
+  document.body.appendChild(layer);
+  layer.addEventListener('mousedown',e=>{ if(e.target===layer)closeAuth(); });
   const go=async()=>{
     const msg=$('lbMsg'),btn=$('lbGo'),n=$('lbUser').value.trim(),p=$('lbPass').value;
     msg.style.color='var(--danger)'; msg.textContent=''; btn.disabled=true;
-    try{ mode==='new'?await doSignup(n,p):await doLogin(n,p); closeModal(); toast('Leaderboards','Welcome, '+me.username+'!','crown'); refreshUI(); }
+    try{ mode==='new'?await doSignup(n,p):await doLogin(n,p); closeAuth(); toast('Leaderboards','Welcome, '+me.username+'!','crown'); refreshUI(); }
     catch(e){ msg.textContent=e&&e.msg?e.msg:authErr(e); btn.disabled=false; }
   };
   $('lbGo').onclick=go;
@@ -5272,6 +5282,7 @@ switchTab=function(n){
 
 window.__lb={
   open:openAuth,
+  close:closeAuth,
   tab:m=>openAuth(m),
   pick:id=>{selCat=id;lastTopAt[id]=0;renderStats();fetchTop(id,true);},
   refresh:async()=>{ await submit(true); await refreshRanks(true); await fetchTop(selCat,true); },
