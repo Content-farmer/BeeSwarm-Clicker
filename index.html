@@ -3090,6 +3090,9 @@ function migrateCubicV9(){
   if(T>1e21){
     const kh=kOfGoal(T);
     if(kh>ASC_GOAL_KMAX&&Math.abs(goalOf(kh)-T)<=T*1e-9)return;
+    // chain was extended/re-scaled: snap saves from the old tail to the next goal on the current chain
+    state.tokenThreshold=goalOf(kh+1);
+    return;
   }
   let b=0,t=1e9; // goals reached on the legacy chains (flat 2.5x -> reverse ramp)
   for(;;){const nx=t*rampMul(b+1);if(nx<=T&&b<9998){b++;t=nx;}else break;}
@@ -4040,9 +4043,9 @@ init=function(){
      guard; the only write paths are __v10.doAscend() and __v10.buyPetal().
    ============================================================================ */
 const ASCEND_COST=5000;          // v14: TOKENS consumed by one ascension (was rebirths)
-const ASC_GOAL_KMAX=10000;       // last goal on the cubic chain (10000³ × 1B = 1 sextillion)
-const ASC_GOAL_BASE=1e21;        // value of goal #10000
-const ASC_GROWTH=1.5;            // every goal past #10000 is ×1.5
+const ASC_GOAL_KMAX=15000;       // last goal on the cubic chain (15000³ × 1B = 3.375 sextillion)
+const ASC_GOAL_BASE=3.375e21;    // value of goal #15000 (15000³ × 1B)
+const ASC_GROWTH=2;              // HARD SCALING: every goal past #15000 is ×2 (was ×1.5)
 
 /* ---------------- Cosmic Petal upgrades (the ascension skill tree) --------- */
 const ASC_UPGRADES=[
