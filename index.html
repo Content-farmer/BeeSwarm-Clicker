@@ -2985,7 +2985,7 @@ function updateRebirth(){
    reads higher and honey synergies convert more) and +1% stronger honey pollen
    bonuses. Synergy upgrade requirements still use raw achievement honey. --- */
 PERKS.push({id:'store',name:'Honey Silo',ico:'hive',max:10,
-  costs:[10,24,56,128,280,600,1200,2200,3600,5600],
+  costs:[10,15,24,37,57,88,135,209,323,500],
   desc:l=>'Honey stores are '+l+'% better \u2014 +'+l+'% stored honey and +'+l+'% honey pollen bonuses.'});
 function effHoneyPct(){return honeyPct+plvl('store');}
 
@@ -4808,7 +4808,7 @@ function bjDrawUi(resArg){
       if(!isFinite(b)||b<1){sfx('err');toast('No bet','Enter how much pollen you want to put on the table.','gem');return;}
       bjUiAct('deal',b);
     };
-    $('bjMax').onclick=()=>{bet.value=String(Math.max(1,Math.floor(state.pollen)));};
+    $('bjMax').onclick=()=>{bet.value=Math.min(1e18,Math.max(1,Math.floor(state.pollen))).toFixed(0);};
     $('bjClear').onclick=()=>{bet.value='';bet.focus();};
     bet.addEventListener('keydown',e=>{if(e.key==='Enter')$('bjDeal').click();});
   }else{
@@ -5112,7 +5112,7 @@ async function submit(force){
   const v=track(); if(!v)return;
   const sig=JSON.stringify(v);
   if(!force&&sig===lastSig)return;
-  if(!force&&Date.now()-lastSubmit<20000)return;
+  if(!force&&Date.now()-lastSubmit<10000)return;
   busy=true;
   try{
     const {doc,writeBatch,serverTimestamp}=FB.fs, day=dayKey(), b=writeBatch(FB.db);
@@ -5128,7 +5128,7 @@ async function submit(force){
 function collFor(c){ const {collection}=FB.fs; return c.scope==='all'?collection(FB.db,'players'):collection(FB.db,'days',dayKey(),'entries'); }
 async function refreshRanks(force){
   if(!me||!FB)return;
-  if(!force&&Date.now()-lastRankAt<30000)return;
+  if(!force&&Date.now()-lastRankAt<15000)return;
   lastRankAt=Date.now();
   const v=track(); if(!v)return;
   const {query,where,getCountFromServer}=FB.fs;
@@ -5141,7 +5141,7 @@ async function refreshRanks(force){
 }
 async function fetchTop(id,force){
   if(!FB)return;
-  if(!force&&Date.now()-(lastTopAt[id]||0)<30000)return;
+  if(!force&&Date.now()-(lastTopAt[id]||0)<15000)return;
   lastTopAt[id]=Date.now();
   const c=catById(id), {query,orderBy,limit,getDocs}=FB.fs;
   try{
@@ -5290,12 +5290,28 @@ window.__lb={
   retry:()=>{status='loading';refreshUI();loadFB();}
 };
 
-/* periodic sync: every 5s check for rebirth/ascension changes; at most every 90s otherwise */
+/* exact lifetime-rebirth tracking: count every rebirth as it happens and capture totals right before an ascension wipes them */
+const _cr=confirmRebirth;
+confirmRebirth=function(){ const r=_cr.apply(this,arguments); try{ if(me)track(); }catch(e){} return r; };
+const _an=ascendNow;
+ascendNow=function(){
+  try{ if(me)track(); }catch(e){}
+  const r=_an.apply(this,arguments);
+  try{ if(me){ track(); submit(true).then(()=>refreshRanks(true)); } }catch(e){}
+  return r;
+};
+
+/* periodic sync: every 5s. Submits fast (15s) while the Stats/Options tab is open, every 90s otherwise;
+   rebirths/ascensions submit immediately. */
 setInterval(()=>{
   if(!me||!FB)return;
   const reb=Math.floor(num(state.rebirths)), asc=Math.floor(num(state.ascensions));
   const changed=reb!==lastReb||asc!==lastAsc;
-  if(changed||Date.now()-lastSubmit>90000){ submit(changed&&Date.now()-lastSubmit>20000).then(()=>{ if(changed)refreshRanks(true); }); }
+  const viewing=!document.hidden&&(curTab==='stats'||curTab==='options');
+  const gap=Date.now()-lastSubmit;
+  if(changed||gap>(viewing?15000:90000)){
+    submit(changed).then(()=>{ if(viewing||changed){ refreshRanks(true); if(curTab==='stats')fetchTop(selCat,true); } });
+  }
 },5000);
 document.addEventListener('visibilitychange',()=>{ if(document.hidden&&me)submit(true); });
 
