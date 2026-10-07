@@ -4050,114 +4050,17 @@ init=function(){
 const ASCEND_COST=5000;          // v14: TOKENS consumed by one ascension (was rebirths)
 const ASC_GOAL_KMAX=15000;       // last goal on the cubic chain (15000³ × 1B = 3.375 sextillion)
 const ASC_GOAL_BASE=3.375e21;    // value of goal #15000 (15000³ × 1B)
-const ASC_GROWTH=2;              // HARD SCALING: every goal past #15000 is ×2 (was ×1.5)
-
-/* ---------------- Cosmic Petal upgrades (the ascension skill tree) --------- */
-const ASC_UPGRADES=[
- {id:"bloom",name:"New Bloom",cost:1,req:null,x:614,y:638,ico:"flower",fx:{"cps": 1.1},desc:"+10% pollen per second, forever. The flower blooms anew."},
- {id:"busy",name:"Busy Bees",cost:2,req:"bloom",x:498,y:658,ico:"bee",fx:{"cps": 1.5},desc:"All bees produce x1.5 pollen."},
- {id:"bulk",name:"Bulk Order",cost:4,req:"busy",x:498,y:518,ico:"hive",fx:{"beeCost": 0.9, "start": 1000000000000.0},desc:"Bees cost 10% less, and every rebirth begins with 1 trillion pollen already collected."},
- {id:"swarm",name:"Swarm Instinct",cost:8,req:"bulk",x:498,y:372,ico:"star",fx:{"cps": 2, "beeCost": 1.15},desc:"All bees produce x2 pollen. Debuff: bees cost 15% more."},
- {id:"queen",name:"Queen's Decree",cost:15,req:"swarm",x:406,y:232,ico:"crown",fx:{"cps": 3, "perAsc": 0.05},desc:"All bees produce x3 pollen, plus +5% pollen per second for every ascension you have performed."},
- {id:"bee0",name:"Basic Mastery",cost:2,req:"bloom",x:728,y:652,ico:"bee",bee:0,fx:{},desc:"Basic Bees produce x3 pollen."},
- {id:"bee1",name:"Brave Mastery",cost:2,req:"bee0",x:826,y:690,ico:"bee",bee:1,fx:{},desc:"Brave Bees produce x3 pollen."},
- {id:"bee2",name:"Bomber Mastery",cost:3,req:"bee1",x:924,y:730,ico:"bee",bee:2,fx:{},desc:"Bomber Bees produce x3 pollen."},
- {id:"bee3",name:"Bumble Mastery",cost:3,req:"bee2",x:1034,y:772,ico:"bee",bee:3,fx:{},desc:"Bumble Bees produce x3 pollen."},
- {id:"bee4",name:"Cool Mastery",cost:4,req:"bee3",x:1142,y:860,ico:"bee",bee:4,fx:{},desc:"Cool Bees produce x3 pollen."},
- {id:"bee5",name:"Honey Mastery",cost:4,req:"bee4",x:1210,y:960,ico:"bee",bee:5,fx:{},desc:"Honey Bees produce x3 pollen."},
- {id:"bee6",name:"Rage Mastery",cost:5,req:"bee5",x:1180,y:1084,ico:"bee",bee:6,fx:{},desc:"Rage Bees produce x3 pollen."},
- {id:"bee7",name:"Bubble Mastery",cost:5,req:"bee6",x:1102,y:1182,ico:"bee",bee:7,fx:{},desc:"Bubble Bees produce x3 pollen."},
- {id:"bee8",name:"Exhausted Mastery",cost:6,req:"bee7",x:1008,y:1244,ico:"bee",bee:8,fx:{},desc:"Exhausted Bees produce x3 pollen."},
- {id:"bee9",name:"Shy Mastery",cost:7,req:"bee8",x:914,y:1308,ico:"bee",bee:9,fx:{},desc:"Shy Bees produce x3 pollen."},
- {id:"bee10",name:"Diamond Mastery",cost:8,req:"bee9",x:806,y:1368,ico:"bee",bee:10,fx:{},desc:"Diamond Bees produce x3 pollen."},
- {id:"bee11",name:"Carpenter Mastery",cost:9,req:"bee10",x:888,y:1452,ico:"bee",bee:11,fx:{},desc:"Carpenter Bees produce x3 pollen."},
- {id:"bee12",name:"Spicy Mastery",cost:10,req:"bee11",x:992,y:1530,ico:"bee",bee:12,fx:{},desc:"Spicy Bees produce x3 pollen."},
- {id:"bee13",name:"Buoyant Mastery",cost:11,req:"bee12",x:1090,y:1582,ico:"bee",bee:13,fx:{},desc:"Buoyant Bees produce x3 pollen."},
- {id:"bee14",name:"Fuzzy Mastery",cost:12,req:"bee13",x:1200,y:1640,ico:"bee",bee:14,fx:{},desc:"Fuzzy Bees produce x3 pollen."},
- {id:"bee15",name:"Cobalt Mastery",cost:14,req:"bee14",x:1294,y:1608,ico:"bee",bee:15,fx:{},desc:"Cobalt Bees produce x3 pollen."},
- {id:"bee16",name:"Crimson Mastery",cost:16,req:"bee15",x:1386,y:1520,ico:"bee",bee:16,fx:{},desc:"Crimson Bees produce x3 pollen."},
- {id:"bee17",name:"Digital Mastery",cost:18,req:"bee16",x:1460,y:1432,ico:"bee",bee:17,fx:{},desc:"Digital Bees produce x3 pollen."},
- {id:"clk1",name:"Sturdy Cursor",cost:2,req:"bee0",x:722,y:538,ico:"cursor",fx:{"click": 3},desc:"Clicking power x3."},
- {id:"clk2",name:"Golden Touch",cost:4,req:"clk1",x:722,y:352,ico:"gem",fx:{"share": 0.02},desc:"Clicking also gains +2% of your pollen per second."},
- {id:"clk3",name:"Frantic Fingers",cost:6,req:"clk2",x:726,y:232,ico:"pointer",fx:{"click": 5, "cps": 0.95},desc:"Clicking power x5. Debuff: bees work 5% slower."},
- {id:"clk4",name:"Sun Fury",cost:10,req:"clk3",x:722,y:118,ico:"zap",fx:{"click": 10, "cps": 0.9},desc:"Clicking power x10. Debuff: bees work 10% slower."},
- {id:"clk5",name:"Storm Caller",cost:12,req:"clk4",x:826,y:164,ico:"clock",fx:{"storm": 10000, "golden": 2, "click": 0.8},desc:"Flower storms last 10 seconds longer and golden flowers appear twice as often. Debuff: clicking power x0.8."},
- {id:"unf1",name:"Larva Labor",cost:3,req:"bloom",x:614,y:742,ico:"heart",fx:{"cps": 2},desc:"Baby bees are put to work before they can even fly. All bees produce x2 pollen."},
- {id:"unf2",name:"Nectar Raids",cost:5,req:"unf1",x:614,y:882,ico:"wing",fx:{"cps": 1.5},desc:"Raid the neighbouring hives at night. Pollen per second x1.5."},
- {id:"unf3",name:"Pesticide Pollen",cost:8,req:"unf2",x:498,y:960,ico:"drop",fx:{"cps": 3, "golden": 0.5},desc:"Poisoned pollen is very productive. Pollen per second x3. Debuff: golden flowers appear half as often."},
- {id:"unf4",name:"Forced Overtime",cost:12,req:"unf3",x:406,y:1052,ico:"clock",fx:{"cps": 4, "beeCost": 1.25},desc:"No breaks. No honey. Pollen per second x4. Debuff: bees cost 25% more."},
- {id:"unf5",name:"Hive Sabotage",cost:10,req:"unf4",x:266,y:1098,ico:"magnet",fx:{"click": 4, "storm": -5000},desc:"Sabotage every rival flower. Clicking power x4. Debuff: flower storms last 5 seconds shorter."},
- {id:"unf6",name:"Queen Overthrown",cost:20,req:"unf5",x:120,y:1110,ico:"crown",fx:{"cps": 6, "click": 0.5},desc:"A hostile takeover of the throne. Pollen per second x6. Debuff: clicking power x0.5."},
- {id:"unf7",name:"Wasp Mercenaries",cost:14,req:"unf4",x:436,y:1156,ico:"hex",fx:{"cps": 3, "beeCost": 1.1},desc:"Hired muscle guards the meadow. Pollen per second x3. Debuff: bees cost 10% more."},
- {id:"unf8",name:"Pollen Cartel",cost:22,req:"unf7",x:550,y:1204,ico:"gem",fx:{"cps": 5, "golden": 0.75},desc:"You now control the pollen market. Pollen per second x5. Debuff: golden flowers appear 25% less often."},
- {id:"unf9",name:"Sold Souls",cost:35,req:"unf8",x:650,y:1152,ico:"hive",fx:{"cps": 10, "click": 0.25},desc:"The swarm's minds are pooled and drained for profit. Pollen per second x10. Debuff: clicking power x0.25."}
-];
-
-// --- v17 hardening: freeze runtime-constant data ----------------------------
-// These tables are read-only game data. Freezing them stops console edits like
-// TOWERS[0].cps=1e9 or pushing fake entries. (An attacker who rewrites the
-// page removes the freeze itself - this fences off casual DevTools edits.)
-function __bscDeepFreeze(o){
-  if(o&&typeof o==='object'&&!Object.isFrozen(o)){ Object.freeze(o); for(const k in o)__bscDeepFreeze(o[k]); }
-  return o;
-}
-// v18.1 FIX: this freeze used to run HERE, at script load — but UPG_BY_ID is
-// still empty until init() calls buildUpgradeData(), so init() crashed with
-// "Cannot add property u_t0_0, object is not extensible" and the game never
-// booted. The freeze now runs via __bscFreezeGameData() right after init().
-function __bscFreezeGameData(){
-  [TOWERS,TIER_NAMES,PERKS,GF_OUTCOMES,DRIVE_STEP,CLICK_UPGRADES,SYN_BEES,SYN_UPGRADES,
-   FLOWER_UPGRADES,FLOWER_STYLES,ASC_UPGRADES,UPG_BY_ID].forEach(__bscDeepFreeze);
-}
-
-const ASC_BEE_MULT=3;           // v16: every 'Mastery' node on the long trail multiplies its bee by this
-const ASC_WORLD_W=1600, ASC_WORLD_H=1770;
-
-function petalIcoHtml(size){
-  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 64 64" aria-hidden="true" style="vertical-align:-2px">'+
-    '<path d="M32 4c11 12 17 22 17 32a17 17 0 11-34 0c0-10 6-20 17-32z" fill="#ff9ecb" stroke="#b3477c" stroke-width="3.5"/>'+
-    '<path d="M32 16c6 8 9 14 9 20a9 9 0 11-18 0c0-6 3-12 9-20z" fill="#ffd7ea" opacity=".9"/></svg>';
-}
-
-/* ---------------- petal effect helpers (pUp param = audit snapshot) -------- */
-function ascOwned(id,pUp){ const o=(pUp!==undefined&&pUp!==null)?pUp:state.pUp; return !!(o&&o[id]); }
-// v16: every petal effect is data-driven from the fx table on each ASC_UPGRADES entry
-function ascCpsMult(pUp,ascN){
-  const n=(ascN!==undefined&&ascN!==null)?ascN:(state.ascensions||0);
-  let m=1;
-  for(const d of ASC_UPGRADES){
-    if(!d.fx||!ascOwned(d.id,pUp))continue;
-    if(d.fx.cps)m*=d.fx.cps;
-    if(d.fx.perAsc)m*=1+d.fx.perAsc*n;
-  }
-  return m;
-}
-function ascClickMult(pUp){ let m=1; for(const d of ASC_UPGRADES){ if(d.fx&&d.fx.click&&ascOwned(d.id,pUp))m*=d.fx.click; } return m; }
-function ascClickShare(pUp){ let s=0; for(const d of ASC_UPGRADES){ if(d.fx&&d.fx.share&&ascOwned(d.id,pUp))s+=d.fx.share; } return s; }
-function ascGoldenDiv(pUp){ let m=1; for(const d of ASC_UPGRADES){ if(d.fx&&d.fx.golden&&ascOwned(d.id,pUp))m*=d.fx.golden; } return m; }
-function ascStormBonusMs(pUp){ let s=0; for(const d of ASC_UPGRADES){ if(d.fx&&d.fx.storm&&ascOwned(d.id,pUp))s+=d.fx.storm; } return s; }
-function ascStartPollen(pUp){ let s=0; for(const d of ASC_UPGRADES){ if(d.fx&&d.fx.start&&ascOwned(d.id,pUp))s=Math.max(s,d.fx.start); } return s; }
-function ascCostMult(pUp){ let m=1; for(const d of ASC_UPGRADES){ if(d.fx&&d.fx.beeCost&&ascOwned(d.id,pUp))m*=d.fx.beeCost; } return m; }
-function ascBeeMult(i,pUp){ return ascOwned('bee'+i,pUp)?ASC_BEE_MULT:1; }
-function petalUnlocked(def){ return !def.req||!!(state.pUp&&state.pUp[def.req]); }
-
-/* ============================================================================
-   v13 REBIRTH CHAIN — hybrid cubic → ×1.5 exponential
-   ----------------------------------------------------------------------------
-   Goal #k is worth k³ × 1 billion pollen while k ≤ 10000 (exactly the old v9
-   chain, so every existing save below 1 sextillion is unchanged). Past that,
-   each next goal is ×1.5 the previous one. Cubic growth flattens out (the gap
-   between goal k and k+1 shrinks to +0.03% at k=10000), which let endgame
-   players with octillion-scale incomes cross thousands of goals per run and
-   spam rebirths — the exponential tail makes every goal 50% bigger than the
-   last, so goals always pull away from income growth.
-   ============================================================================ */
+const ASC_GROWTH=1.03;           // goals #15001..#20000 are ×1.03 each (gentle, so 5,000-token ascensions stay reachable)
+const ASC_GOAL_K2=20000;         // last goal on the ×1.03 stretch
+const ASC_GROWTH2=2;             // every goal past #20000 is ×2 (hard scaling)
+const ASC_GOAL_BASE2=ASC_GOAL_BASE*Math.pow(ASC_GROWTH,ASC_GOAL_K2-ASC_GOAL_KMAX); // value of goal #20000
 function goalOf(k){
   if(k<=1)return 1e9;
   if(k<=ASC_GOAL_KMAX)return k*k*k*1e9;
-  const e=k-ASC_GOAL_KMAX;
+  if(k<=ASC_GOAL_K2)return ASC_GOAL_BASE*Math.pow(ASC_GROWTH,k-ASC_GOAL_KMAX);
+  const e=k-ASC_GOAL_K2;
   if(e>2000)return Infinity;   // far beyond any conceivable run
-  return ASC_GOAL_BASE*Math.pow(ASC_GROWTH,e);
+  return ASC_GOAL_BASE2*Math.pow(ASC_GROWTH2,e);
 }
 function kOfGoal(T){ // largest k >= 1 with goalOf(k) <= T
   if(!(T>=1e9))return 1;
@@ -4169,12 +4072,20 @@ function kOfGoal(T){ // largest k >= 1 with goalOf(k) <= T
     while(k<ASC_GOAL_KMAX&&(k+1)*(k+1)*(k+1)*1e9<=T)k++;
     return k;
   }
-  if(!isFinite(T))return ASC_GOAL_KMAX+2000; // Infinity guard
-  let k=ASC_GOAL_KMAX+Math.floor(Math.log(T/ASC_GOAL_BASE)/Math.log(ASC_GROWTH));
-  if(!(k>=ASC_GOAL_KMAX))k=ASC_GOAL_KMAX;
-  if(k>ASC_GOAL_KMAX+2000)k=ASC_GOAL_KMAX+2000;
+  if(!isFinite(T))return ASC_GOAL_K2+2000;   // Infinity guard
+  const LIM=ASC_GOAL_K2+2000;
+  let k;
+  if(T<=ASC_GOAL_BASE2){                     // gentle x1.03 stretch
+    k=ASC_GOAL_KMAX+Math.floor(Math.log(T/ASC_GOAL_BASE)/Math.log(ASC_GROWTH));
+    if(!(k>=ASC_GOAL_KMAX))k=ASC_GOAL_KMAX;
+    if(k>ASC_GOAL_K2)k=ASC_GOAL_K2;
+  }else{                                     // x2 stretch
+    k=ASC_GOAL_K2+Math.floor(Math.log(T/ASC_GOAL_BASE2)/Math.log(ASC_GROWTH2));
+    if(!(k>=ASC_GOAL_K2))k=ASC_GOAL_K2;
+    if(k>LIM)k=LIM;
+  }
   while(k>ASC_GOAL_KMAX&&goalOf(k)>T)k--;
-  while(k<ASC_GOAL_KMAX+2000&&isFinite(goalOf(k+1))&&goalOf(k+1)<=T)k++;
+  while(k<LIM&&isFinite(goalOf(k+1))&&goalOf(k+1)<=T)k++;
   return k;
 }
 // --- OVERRIDE: rampCtx — v13 hybrid chain (idx = goals banked, t = next goal) ---
