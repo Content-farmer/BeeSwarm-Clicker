@@ -5396,5 +5396,224 @@ renderOptions(); if(curTab==='stats')renderStats();
 })();
 </script>
 
+
+<style id="perf-patch-css">
+
+/* =====================================================================
+   PERFORMANCE PATCH — CSS overrides
+   - Kill will-change + filter on swarm bees (was creating 34+ GPU layers)
+   - Add content-visibility:auto to hidden tab panels (skips layout/paint)
+   - Remove will-change on the .hFill::after shine (was a persistent layer)
+   - Add layout/paint containment on heavy panels
+   NOTE: Main flower keeps its drop-shadow filter (one element is cheap).
+         Do NOT add box-shadow on #flowerWrap (it's a square div —
+         a box-shadow renders as a visible square behind the round flower).
+   ===================================================================== */
+.swarmBee{will-change:auto !important; filter:none !important; backface-visibility:visible}
+.swarmBee img.beeFlyImg{filter:none !important}
+.trow .beeIco{filter:none !important}
+.beeShopImg{filter:none !important}
+
+.view:not(.on){content-visibility:auto; contain-intrinsic-size:0 60vh}
+.view{contain:layout style}
+
+.hFill::after{will-change:auto !important}
+
+#skyDeco{contain:strict}
+#gardenScene{contain:layout paint style}
+#buffBar, #toasts, #richTip{contain:layout paint style}
+#pollenBox, #topbar{contain:layout style}
+
+</style>
+<script id="perf-patch-js">
+
+/* =====================================================================
+   PERFORMANCE PATCH — JS overrides
+   Appended AFTER all original code (including the leaderboard block).
+   Runs at DOMContentLoaded. Idempotent.
+   ===================================================================== */
+(function(){
+  'use strict';
+
+  if(window.__bscPerfPatched)return;
+  window.__bscPerfPatched=true;
+
+  /* ---------- 1. Blob-URL cache for data: URIs -------------------------- *
+   * The game stores ~44 base64 WEBP images as JS string constants
+   * (BEE_FLIGHT, BEE_ICONS, FLOWER_BIG, ...). Each string lives in the JS
+   * heap forever (UTF-16 = ~2x the base64 length = ~240KB). Plus every
+   * <img src="data:..."> creates a separate cache entry that ALSO holds
+   * the data: URL string. Converting to Blob URLs moves the binary into a
+   * Blob (heap-neutral) and lets the browser dedupe. */
+  const blobCache = new Map();
+  function toBlobURL(dataURL){
+    if(blobCache.has(dataURL))return blobCache.get(dataURL);
+    try{
+      const comma=dataURL.indexOf(',');
+      const mime=(dataURL.slice(0,comma).match(/image\/[a-z0-9.+-]+/)||['image/webp'])[0];
+      const bstr=atob(dataURL.slice(comma+1));
+      const n=bstr.length;
+      const u8=new Uint8Array(n);
+      for(let i=0;i<n;i++)u8[i]=bstr.charCodeAt(i);
+      const blob=new Blob([u8],{type:mime});
+      const url=URL.createObjectURL(blob);
+      blobCache.set(dataURL,url);
+      return url;
+    }catch(e){return dataURL;}
+  }
+
+  /* ---------- 2. Re-point every existing <img> to Blob URLs ------------- */
+  function repointImages(root){
+    const imgs=(root||document).querySelectorAll('img[src^="data:image/"]');
+    imgs.forEach(img=>{
+      const newSrc=toBlobURL(img.getAttribute('src'));
+      if(newSrc!==img.getAttribute('src'))img.setAttribute('src',newSrc);
+    });
+  }
+  repointImages(document);
+
+  /* ---------- 3. Override the rendering helpers to use Blob URLs ------ */
+  try{
+    const _beeIconOrig=beeIcon;
+    beeIcon=function(i,size){
+      const html=_beeIconOrig(i,size);
+      return html.replace(/src="(data:image\/[^"]+)"/g,(m,d)=>'src="'+toBlobURL(d)+'"');
+    };
+  }catch(e){}
+  try{
+    const _beeFlyOrig=beeFly;
+    beeFly=function(i,size){
+      const html=_beeFlyOrig(i,size);
+      return html.replace(/src="(data:image\/[^"]+)"/g,(m,d)=>'src="'+toBlobURL(d)+'"');
+    };
+  }catch(e){}
+  try{
+    const _beeShopIconOrig=beeShopIcon;
+    beeShopIcon=function(name,size){
+      const html=_beeShopIconOrig(name,size);
+      return html.replace(/src="(data:image\/[^"]+)"/g,(m,d)=>'src="'+toBlobURL(d)+'"');
+    };
+  }catch(e){}
+
+  try{
+    const _spawnGoldenOrig=spawnGolden;
+    spawnGolden=function(stormMode){
+      _spawnGoldenOrig(stormMode);
+      repointImages(document.getElementById('gardenScene'));
+    };
+  }catch(e){}
+
+  try{
+    const _buildDecorOrig=buildDecor;
+    buildDecor=function(){
+      _buildDecorOrig();
+      repointImages(document.getElementById('flowerWrap'));
+    };
+  }catch(e){}
+
+  /* ---------- 4. Defang the duplicate requestAnimationFrame chain ------- *
+   * The init() override chain ends up calling both setInterval(tickerTick)
+   * and requestAnimationFrame(loop) TWICE. We make loopBody idempotent
+   * within a single frame. */
+  try{
+    const _loopBodyOrig=loopBody;
+    let _lastFrameT=-1;
+    loopBody=function(now,maxDt){
+      if(document.hidden){return;}
+      if(now===_lastFrameT)return;
+      if(Math.abs(now-_lastFrameT)<1.5 && now>_lastFrameT){
+        _lastFrameT=now;
+        return;
+      }
+      _lastFrameT=now;
+      _loopBodyOrig(now,maxDt);
+    };
+  }catch(e){}
+
+  /* ---------- 5. Skip swarmTick when garden not visible ---------------- */
+  let gardenVisible=true;
+  if('IntersectionObserver' in window){
+    try{
+      const io=new IntersectionObserver(entries=>{
+        gardenVisible=entries.some(e=>e.isIntersecting);
+      },{threshold:0.02});
+      const g=document.getElementById('gardenScene');
+      if(g)io.observe(g);
+    }catch(e){}
+  }
+  try{
+    const _swarmTickOrig=swarmTick;
+    let _swarmSkipCount=0;
+    swarmTick=function(dt){
+      if(document.hidden||!gardenVisible)return;
+      _swarmSkipCount++;
+      if(_swarmSkipCount & 1)return;
+      _swarmTickOrig(dt);
+    };
+  }catch(e){}
+
+  /* ---------- 6. Throttle UI updates to the active tab ---------------- */
+  try{
+    const _updateTowerRowsOrig=updateTowerRows;
+    updateTowerRows=function(){
+      if(curTab!=='bees')return;
+      _updateTowerRowsOrig();
+    };
+  }catch(e){}
+  try{
+    const _refreshUpgradesOrig=refreshUpgrades;
+    refreshUpgrades=function(force){
+      if(curTab!=='upgrades' && !force)return;
+      _refreshUpgradesOrig(force);
+    };
+  }catch(e){}
+
+  /* ---------- 9. Re-point any images added by future DOM mutations ---- *
+   * Use a MutationObserver to catch new <img src="data:..."> elements
+   * (toasts, modals, info panels, etc.) and swap them to Blob URLs. */
+  try{
+    const mo=new MutationObserver(muts=>{
+      for(const m of muts){
+        for(const node of m.addedNodes){
+          if(node.nodeType!==1)continue;
+          if(node.tagName==='IMG' && (node.getAttribute('src')||'').startsWith('data:image/')){
+            node.setAttribute('src',toBlobURL(node.getAttribute('src')));
+          }else if(node.querySelectorAll){
+            const imgs=node.querySelectorAll('img[src^="data:image/"]');
+            imgs.forEach(img=>{
+              img.setAttribute('src',toBlobURL(img.getAttribute('src')));
+            });
+          }
+        }
+      }
+    });
+    mo.observe(document.body,{childList:true,subtree:true});
+  }catch(e){}
+
+  /* ---------- 11. Free Blob URLs on unload --------------------------- */
+  window.addEventListener('pagehide',()=>{
+    try{
+      blobCache.forEach(url=>URL.revokeObjectURL(url));
+      blobCache.clear();
+    }catch(e){}
+  });
+
+  /* ---------- 12. Log a one-shot memory hint ------------------------ */
+  if(window.console && console.info){
+    console.info(
+      '%c[Bee Swarm Perf Patch] applied (leaderboard edition)',
+      'color:#f7b32b;font-weight:bold',
+      '\n - Firebase leaderboards preserved untouched',
+      '\n - Blob URLs for data: images',
+      '\n - loopBody dedupe (was running 2x per frame)',
+      '\n - swarmTick throttled to 30fps + skipped when garden hidden',
+      '\n - updateTowerRows / refreshUpgrades only run on active tab',
+      '\n - CSS: removed will-change/filter on .swarmBee + .hFill::after',
+      '\n - CSS: content-visibility:auto on hidden .view panels'
+    );
+  }
+})();
+
+</script>
 </body>
 </html>
